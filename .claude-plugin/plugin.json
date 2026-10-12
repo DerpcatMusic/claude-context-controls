@@ -1,6 +1,6 @@
 {
   "name": "context-controls",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Nested context / 5-hour / weekly rings plus compaction and subagent model controls above the prompt.",
   "author": {
     "name": "DerpcatMusic"

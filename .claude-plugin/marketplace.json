@@ -1,6 +1,11 @@
 {
   "name": "context-controls",
-  "owner": { "name": "DerpcatMusic" },
+  "owner": {
+    "name": "DerpcatMusic"
+  },
+  "metadata": {
+    "description": "A panel above the Claude Code prompt: usage rings, compaction and subagent controls."
+  },
   "plugins": [
     {
       "name": "context-controls",
