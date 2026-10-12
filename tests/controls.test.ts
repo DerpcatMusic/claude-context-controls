@@ -156,3 +156,21 @@ test('a failed policy check refuses the request instead of silently bypassing th
   expect(requests).toBe(0);
   expect(result.answer).toContain('No request was sent');
 });
+
+test('values re-applied from settings.json are put back to the panel choice on the next refresh', async ($, on) => {
+  const { env } = setup(on);
+  const clock = mock.clock(on);
+  await $.session.start(START);
+  await $.command.run({ command: 'control-panel', args: 'percent 40' });
+  // A settings reload writes settings.json env back over the panel.
+  env.set('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', '30');
+  env.set('CLAUDE_CODE_SUBAGENT_MODEL', 'claude-opus-5-5');
+  await clock.advance(10_000);
+  expect(env.get('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE')).toBe('40');
+  expect(env.get('CLAUDE_CODE_SUBAGENT_MODEL')).toBe('claude-sonnet-5-5');
+  expect(env.get('CLAUDE_CODE_SUBAGENT_MODEL_FORCE')).toBe('1');
+  // Unlocked, the settings.json pin is dropped so subagents choose for themselves.
+  await $.command.run({ command: 'control-panel', args: 'lock off' });
+  expect(env.get('CLAUDE_CODE_SUBAGENT_MODEL')).toBeUndefined();
+  expect(env.get('CLAUDE_CODE_SUBAGENT_MODEL_FORCE')).toBeUndefined();
+});

@@ -30,6 +30,7 @@ function windowValue(value) {
 }
 
 async function refresh($) {
+  await enforce($);
   const usage = await $.session.usage({ breakdown: 'summary' });
   context = usage.context;
   rateLimits = usage.rateLimits;
@@ -56,7 +57,6 @@ async function setPercent($, value) {
   await refresh($);
 }
 
-// Claude-palette nested rings, outermost first: context, 5-hour, weekly.
 // Claude-palette nested rings, outermost first: context, 5-hour, weekly.
 const RINGS = [
   { r: 36, color: '#D97757' }, // clay
@@ -95,7 +95,6 @@ function rings({ Box, Text, Svg }, items) {
     const fill = valid && value > 0 ? `<circle class="f" cx="${C}" cy="${C}" r="${r}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" pathLength="100" stroke-dasharray="${clamp(value).toFixed(1)} 100" transform="rotate(-90 ${C} ${C})"/>` : '';
     return `<g class="g g${i}">${title}${track}${fill}</g>`;
   }).join('');
-  // Tick on the context ring where auto-compaction fires.
   const centre = items.map(({ value }, i) => `<text class="t t${i}" x="${C}" y="${C + 5}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="${RINGS[i].color}">${pct(value)}</text>`).join('');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="84" height="84" viewBox="0 0 84 84">${STYLE}${body}<g class="s" stroke="#D97757" stroke-width="1.6" stroke-linecap="round">${spark()}</g>${centre}</svg>`;
   const alt = items.map(({ label, value, detail }) => `${label}: ${Number.isFinite(value) ? `${pct(value)} remaining` : 'unavailable'}. ${detail}`).join(' ');
@@ -110,10 +109,23 @@ function rings({ Box, Text, Svg }, items) {
   ] });
 }
 
-// CLAUDE_CODE_SUBAGENT_MODEL(_FORCE) in settings outranks the agent.spawn hook,
-// so the lock writes that variable too; unlocked, subagents choose for themselves.
-async function applyPolicy($) {
-  await $.env.set('CLAUDE_CODE_SUBAGENT_MODEL', policy.locked ? policy.model : undefined);
+// Claude Code re-applies the env block of settings.json whenever settings reload,
+// which would undo the panel. So every refresh (and every 10s) puts the panel's
+// choices back: settings.json values never need to be removed by hand.
+async function enforce($) {
+  // Locked: force every subagent onto the chosen model. Unlocked: drop any pin.
+  const model = policy.locked ? policy.model : undefined, force = policy.locked ? '1' : undefined;
+  if (await $.env.get('CLAUDE_CODE_SUBAGENT_MODEL') !== model) await $.env.set('CLAUDE_CODE_SUBAGENT_MODEL', model);
+  if (await $.env.get('CLAUDE_CODE_SUBAGENT_MODEL_FORCE') !== force) await $.env.set('CLAUDE_CODE_SUBAGENT_MODEL_FORCE', force);
+  // Compaction: only once the person has picked something in the panel.
+  const saved = await $.store.get('compact-percent');
+  const percent = Number.isInteger(saved) && saved >= 1 && saved <= 100 ? String(saved) : undefined;
+  if (percent && await $.env.get('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE') !== percent) await $.env.set('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', percent);
+  const window = await $.store.get('compact-window');
+  if (typeof window === 'string') {
+    const value = window === 'auto' ? undefined : window;
+    if (await $.env.get('CLAUDE_CODE_AUTO_COMPACT_WINDOW') !== value) await $.env.set('CLAUDE_CODE_AUTO_COMPACT_WINDOW', value);
+  }
 }
 
 async function savePolicy($, change) {
@@ -124,7 +136,7 @@ async function savePolicy($, change) {
   // Persist before displaying a selection as saved.
   await $.store.set('policy', updated);
   policy = updated;
-  await applyPolicy($);
+  await enforce($);
   notice = updated.locked ? 'Subagent lock on.' : 'Subagent lock off.';
   $.ui.invalidate('ui.render');
 }
@@ -173,23 +185,6 @@ export function register(on) {
   on('session.start', async ($, e, next) => {
     const saved = await $.store.get('policy');
     if (saved && MODELS.some(({ value }) => value === saved.model) && EFFORTS.includes(saved.effort) && typeof saved.locked === 'boolean') policy = saved;
-    await applyPolicy($);
-    const window = await $.store.get('compact-window');
-    if (typeof window === 'string') {
-      try {
-        const args = windowValue(window);
-        const enabled = await $.config.set({ key: 'autoCompact', value: true });
-        if (enabled.deny) notice = enabled.deny;
-        else await $.env.set('CLAUDE_CODE_AUTO_COMPACT_WINDOW', args === 'auto' ? undefined : args);
-      } catch (error) { notice = `Saved compaction setting could not apply: ${error.message || String(error)}`; }
-    }
-    const savedPercent = await $.store.get('compact-percent');
-    if (Number.isInteger(savedPercent) && savedPercent >= 1 && savedPercent <= 100) {
-      const enabled = await $.config.set({ key: 'autoCompact', value: true });
-      if (enabled.deny) notice = enabled.deny;
-      else await $.env.set('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', String(savedPercent));
-    }
-    if (notice) $.ui.toast(notice);
     await refresh($);
     $.clock.every(10_000, () => refresh($));
     await $.command.register({ name: 'control-panel', description: 'Set compaction/subagent policy; controls stay above the prompt', argumentHint: '[percent 30|compact 300k|compact now|model ID|effort medium|lock on|lock off]', immediate: true });
