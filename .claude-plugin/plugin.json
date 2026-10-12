@@ -1,0 +1,10 @@
+{
+  "name": "context-controls",
+  "version": "0.9.1",
+  "description": "Nested context / 5-hour / weekly rings plus compaction and subagent model controls above the prompt.",
+  "author": {
+    "name": "DerpcatMusic"
+  },
+  "repository": "https://github.com/DerpcatMusic/claude-context-controls",
+  "license": "MIT"
+}

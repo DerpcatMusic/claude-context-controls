@@ -1,0 +1,11 @@
+{
+  "name": "context-controls",
+  "owner": { "name": "DerpcatMusic" },
+  "plugins": [
+    {
+      "name": "context-controls",
+      "source": "./",
+      "description": "Nested context / 5-hour / weekly rings plus compaction and subagent model controls above the prompt."
+    }
+  ]
+}
