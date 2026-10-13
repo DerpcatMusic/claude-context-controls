@@ -160,6 +160,7 @@ test('a failed policy check refuses the request instead of silently bypassing th
 test('values re-applied from settings.json are put back to the panel choice on the next refresh', async ($, on) => {
   const { env } = setup(on);
   const clock = mock.clock(on);
+  on('turn.start', ($, e) => ({ turnId: e.turnId }));
   await $.session.start(START);
   await $.command.run({ command: 'control-panel', args: 'percent 40' });
   // A settings reload writes settings.json env back over the panel.
@@ -169,6 +170,10 @@ test('values re-applied from settings.json are put back to the panel choice on t
   expect(env.get('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE')).toBe('40');
   expect(env.get('CLAUDE_CODE_SUBAGENT_MODEL')).toBe('claude-sonnet-5-5');
   expect(env.get('CLAUDE_CODE_SUBAGENT_MODEL_FORCE')).toBe('1');
+  // Hosts that apply settings after session.start are corrected before the next turn.
+  env.set('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', '30');
+  await $.turn.start({ turnId: 'turn-2', text: 'hi' });
+  expect(env.get('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE')).toBe('40');
   // Unlocked, the settings.json pin is dropped so subagents choose for themselves.
   await $.command.run({ command: 'control-panel', args: 'lock off' });
   expect(env.get('CLAUDE_CODE_SUBAGENT_MODEL')).toBeUndefined();
