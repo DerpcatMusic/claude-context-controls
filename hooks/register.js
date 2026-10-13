@@ -110,8 +110,8 @@ function rings({ Box, Text, Svg }, items) {
 }
 
 // Claude Code re-applies the env block of settings.json whenever settings reload,
-// which would undo the panel. So every refresh (and every 10s) puts the panel's
-// choices back: settings.json values never need to be removed by hand.
+// which would undo the panel. So every turn and every refresh (each 10s) puts the
+// panel's choices back: settings.json values never need to be removed by hand.
 async function enforce($) {
   // Locked: force every subagent onto the chosen model. Unlocked: drop any pin.
   const model = policy.locked ? policy.model : undefined, force = policy.locked ? '1' : undefined;
@@ -211,6 +211,13 @@ export function register(on) {
       $.ui.invalidate('ui.render');
       return { text: `${notice || 'Controls above the prompt.'}\nSubagents: ${policy.model}, ${policy.effort}, lock ${policy.locked ? 'on' : 'off'}.` };
     } catch (error) { return { text: `Could not apply: ${error.message || String(error)}` }; }
+  });
+
+  // Some hosts (the Agent SDK, e.g. T3 Code) apply settings.json env after session.start,
+  // so re-assert before each turn too, ahead of any tool or compaction check.
+  on('turn.start', async ($, e, next) => {
+    await enforce($);
+    return next(e);
   });
 
   on('session.measure', async ($, e, next) => {
